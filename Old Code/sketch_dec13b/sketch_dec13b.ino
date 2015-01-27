@@ -22,7 +22,8 @@ int Ifahrenheit = 100;
 //RTC_DS1307 RTC; // define the Real Time Clock object
 char phone1[] = "+17573248688"; //AT command cmgs requires quotation marks around text string
 char phone2[] = "+17579151048";
-void setup()//*****************************************
+char timeStamp[21] = ("15/01/20,13:15:10+04")
+                     void setup()//*****************************************
 {
   Serial1.begin(9600);
   Serial.begin(9600);  //Serial1.begin(9600);//Mega shield extra UARTs, ensure correct board is selected
@@ -45,15 +46,17 @@ void loop()//*************************************
   delay(timeDelaySeconds * 10000);//This gives 1 minute between readings
 }
 
- takeTime()
+takeTime()//should remove+CCLK: then get date and time before LF
 {
   Serial1.print("AT+CCLK");
   while (!Serial1.available)
   {
   }
-  char serialtime[40] = Serial1
-  
-  
+Serial1.readBytesUntil(: , timeStamp);
+  Serial1.readBytesUntil(lf, timeStamp);
+  Serial.println(timeStamp);
+}
+
 void takeTemp()
 {
   int centigrade = analogRead(temperatureIn) * 0.488;
@@ -91,7 +94,7 @@ int Serial1Response(int maxsec )//waits "maxsec" sec maximum for serial1 (defaul
   for ( x = 0; x == (100 * maxsec); x++)//100*delay of 10 usec*maxsec
   {
     delay(10);
-  } 
+  }
   return (Serial1.available());//return some number bytes available
 }
 void logdata()//               ...........................
@@ -100,6 +103,8 @@ void logdata()//               ...........................
   // DateTime now = RTC.now();
 
   PString str( MESSAGE, 160  );
+  str.print( ",");
+  str.print(timestamp);
   str.print( ",");
   str.print(PWrange);
   str.print( ",");
@@ -132,21 +137,21 @@ float takeReading()//stores range in global variables
     //Think about how much change could occur between readings
   {
     while ( PWrange + 50 <= (pulseIn(pwPin, HIGH)) || (Irange + 50 < (analogRead(analogIn)))) //58us/cm,
-            //a car or person should give more than 50 CM increase since last reading unless huge flood
-            //then car may not show 50 cm..., this sonar mod will sense nearest object
-            // a small number not used since a real level may have ocurred if idle very long
-  {
-    count = count++;
-    delay(10);
+      //a car or person should give more than 50 CM increase since last reading unless huge flood
+      //then car may not show 50 cm..., this sonar mod will sense nearest object
+      // a small number not used since a real level may have ocurred if idle very long
+    {
+      count = count++;
+      delay(10);
       if (count == 50)//35 mph 20 ft long car takes .4 sec to get past given point
       {
         break; //Break out and take data if spike becomes long plateau( a tsunami)
       }
     }
     count = 0;
-            PWrange = PWrange + (pulseIn(pwPin, HIGH) / 58); //58us/cm
-            Irange = Irange + (analogRead(analogIn) / (2 * .49)) * (331.33 / IVsound);
-            delay(100);
+    PWrange = PWrange + (pulseIn(pwPin, HIGH) / 58); //58us/cm
+    Irange = Irange + (analogRead(analogIn) / (2 * .49)) * (331.33 / IVsound);
+    delay(100);
   }
   digitalWrite(pingPermit, LOW); //Hold high to range
   PWrange = PWrange / 10; //take 10 readings and average
@@ -175,32 +180,27 @@ void SendTextMessage()
       Serial.print("AT+CMGS =");
       Serial1.println(phone1);
       Serial.println(phone1);
-      if(!Serial1.available()
-       {
-         Serial.print("waiting on modem to respond to at+cmgs=...");
-       }
+      if (!Serial1.available()
+    {
+      Serial.print("waiting on modem to respond to at+cmgs=...");
+      }
       while (!Serial1.available())//wait till modem responds with cr
-      {
-        delay(1000);
-        
+    {
+      delay(1000);
+
       }
-        //Im just going to assume the cr is what is in the buffer
-      }
+      //Im just going to assume the cr is what is in the buffer
     }
-    Serial1.print(MESSAGE);//the content of the message
-    Serial.print("Sending");
-    Serial.print( MESSAGE);
-    Serial1.println(char(26));
-    //}
-    // else
-    //{
-    // Serial1.print("AT + CMGS = "+phone2[]);//send sms message, be careful need to add a country code before the cellphone number
-    // Serial1.println(MESSAGE);//the content of the message
-    //}
   }
-  delay(100);
-  Serial1.println(char(26));//the ASCII code of the ctrl+z is 26
-  delay(100);
+  Serial1.print(MESSAGE);//the content of the message
+  Serial.print("Sending");
+  Serial.print( MESSAGE);
+  Serial1.println(char(26));
 
 }
+//delay(100);
+//Serial1.println(char(26));//the ASCII code of the ctrl+z is 26
+//delay(100);
+
+
 
