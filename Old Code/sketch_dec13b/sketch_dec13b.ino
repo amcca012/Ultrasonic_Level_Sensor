@@ -41,8 +41,8 @@ void setup()//*****************************************
   int centigrade = analogRead(temperatureIn) * 0.488;
   Ifahrenheit = (centigrade) * 9 / 4 + 32;
   IVsound = 331.3 + (centigrade * .6);
-  Ilevel= analogRead(analogIn) * (331.3 / IVsound);
-  Izero=Ilevel;
+  Izero= analogRead(analogIn) * (331.3 / IVsound);
+  //Izero=Ilevel;
 }
 
 void loop()//*************************************
@@ -178,28 +178,47 @@ float takeReading()//stores range in global variables
 {
   int I[4];
   int PW[4];
-  for (int x=0; x==2; x++)
+    for ( int x = 0; x <= 3; x++)//load three readings into array
   {
   int centigrade = (Ifahrenheit - 32) * 4 / 9;
   Irange = analogRead(analogIn) * (331.3 / IVsound); //Temperature correction applied, 1 count/cmdistance
-  PWrange = ( pulseIn(pwPin, HIGH) / 58) * (333.1 / IVsound) ; //58us/cm, temperature correction applied
+  PWrange = ( pulseIn(pwPin, HIGH) / 58) * (333.1 / IVsound)*(191/170) ; //58us/cm, temperature correction applied
   I[x]=Irange;
    PW[x]=PWrange;
-  }
-  
-    if(I[0]>I[1] && I[1]> I[2]||I[0]<I[1] && I[1] < I[2])
+     }
+     if(I[0] > I[1] && I[1] > I[2] || I[0] < I[1] && I[1] < I[2])//find median value
     {
       Irange=I[1];
+      //Serial.print("Median analogue 1=> ");//testing
+      //Serial.println(I[1]);//testing
     }
     else
     {
-     if(I[0]>I[1] && I[2]>I[1] || I[0]<I[1] && I[2]<I[1])
+     if(I[2] > I[1] && I[0] > I[2] || I[0] <I [2] && I[2] <I [1])
     {
       Irange=I[2] ;
+      // Serial.print("Median analogue 2 => ");//testing
+      //  Serial.println(I[2]);//testing
     }
       else
       {
-        Irange = I[3];
+        Irange = I[0];
+        // Serial.print("Median analogue 0=> ");//testing
+        //Serial.println(I[0]);//testing
+      }}
+    if(PW[0] > PW[1] && PW[1] > PW[2] || PW[0] < PW[1] && PW[1] < PW[2])
+    {
+      PWrange=PW[1];
+    }
+    else
+    {
+     if(PW[2] > PW[1] && PW[0] > PW[2] || PW[0] < PW[2] && PW[2] < PW[1])
+    {
+      PWrange=PW[2] ;
+    }
+      else
+      {
+        PWrange = PW[0];
       }}
   Serial.print(Irange);
   Serial.println(" CM  Analog output");
