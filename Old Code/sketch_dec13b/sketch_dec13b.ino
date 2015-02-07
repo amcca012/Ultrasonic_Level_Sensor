@@ -15,15 +15,20 @@ const int temperatureIn = A3;
 //#include <RTClib.h>
 unsigned int Izero = 0;//Start program with new zero
 unsigned long int PWrange = 0;
+int Iday = 0;
+int Imonth =0;
+int Iyear = 0;
+int Ihour = 0;
+int Iminute = 0;
+int Isecond = 0;
 int Irange = 0;
 int Ilevel = 0 ;//level as level approachs detector from  Izero/ causes level to be initially neg
 int IVsound;
 int Ifahrenheit = 100;
-//RTC_DS1307 RTC; // define the Real Time Clock object
-char phone1[] = "+17577598935";
+char phone2[] = "+17573248688";
 //char phone1[] = "+17573248688"; //AT command cmgs requires quotation marks around text string
-char phone2[] = "+17579151048";
-char timeStamp[21] = ("15/01/20,13:15:10+04");
+char phone1[] = "+17579151048";
+char timeStamp[24] = ("15/02/07,10:00:00:10-20");
 void setup()//*****************************************
 {
   Serial1.begin(9600);
@@ -43,6 +48,17 @@ void setup()//*****************************************
   IVsound = 331.3 + (centigrade * .6);
   Izero= analogRead(analogIn) * (331.3 / IVsound);
   //Izero=Ilevel;
+  Serial1.print("AT+cclk=");
+  Serial1.print('"');
+  Serial1.print("15/02/07,10:18:00-20");
+  Serial1.println('"');
+  Serial.print("AT+CCLK=");
+  Serial.print('"');
+  Serial.print("15/02/07,10:18:00-20");
+  Serial.println('"');
+  delay(500);
+  WhatsINSerial1();
+  Serial.println(MESSAGE);
 }
 
 void loop()//*************************************
@@ -55,26 +71,70 @@ void loop()//*************************************
   delay(timeDelaySeconds * 1000);//Will need tweak
 }
 
-void takeTime()//should remove+CCLK: then get date and time before LF
+void takeTime()
 {
-  Serial1.println("AT+");
-  Serial.println("AT+CCLK?");
+  int x = 0;
   char empty[65] = "";
-  delay(100);
+  Serial.println("taketime");
+  /*for (x=0; x <= Serial1.available(); x++)
+  {
+    empty[x]=(Serial1.read());
+  }*/
+  WhatsINSerial1();//function to recycle message buffer read Serial1 buffer
+
+  //Serial.println(Serial1.available());
+  Serial1.println("AT+CCLK?");
+  Serial.println("AT+CCLK?");
+  
+  delay(500);
+  //Serial.print("CCLK answer ==>Serial bytes available =>");
+  //Serial.println(Serial1.available());
   Serial1.flush();
    if (Serial1.available())
   {
-  for(int x=0; x = Serial1.available();  x++)
-  {
-    empty[x] = Serial1.read();
+    WhatsINSerial1();//function to recycle message buffer read Serial1 buffer
   }   
-  }
-  else
+    else
   {
     Serial.println("Nothing in buffer");
   }
-  Serial.println(empty);
- // while (!Serial1.read() == '/r')
+  Serial.println("response to cclk=>");
+  Serial.println(MESSAGE);
+  Iyear=((MESSAGE[10]-48)*10)+(MESSAGE[11]-48);
+  Imonth=((MESSAGE[13]-48)*10)+(MESSAGE[14]-48);
+  Iday=((MESSAGE[16]-48)*10)+(MESSAGE[17]-48);
+  Ihour=((MESSAGE[19]-48)*10)+(MESSAGE[20]-48);
+  Iminute=((MESSAGE[22]-48)*10)+(MESSAGE[23]-48);
+  Isecond=((MESSAGE[25]-48)*10)+(MESSAGE[26]-48);
+  Serial.print("Date=>");
+ Serial.print(Iyear); 
+ Serial.print("/");
+ Serial.print(Imonth); 
+ Serial.print("/");
+ Serial.println(Iday); 
+  Serial.print("Time=>");
+ Serial.print(Ihour); 
+ Serial.print(":");
+ Serial.print(Iminute); 
+ Serial.print(":");
+ Serial.println(Isecond);
+Serial.println(' '); 
+  PString str( timeStamp, 24  );//PString(buffer, sizeof(buffer), pi);
+  // str.print(',');
+   str.print(Iyear); 
+ str.print(',');
+ str.print(Imonth); 
+ str.print(',');
+ str.print(Iday); 
+ str.print(',');
+ str.print(Ihour); 
+ str.print(",");
+ str.print(Iminute); 
+ str.print(",");
+ str.println(Isecond);
+// Serial.print(timeStamp);//comma delimited to insert into final message
+  
+  // while (!Serial1.read() == '/r')
   //{
   //  Serial.print(" waiting resp cclk");
   //  delay(50);
@@ -103,15 +163,16 @@ void powerup()//
   int x = 0;
   int t = 0;
   char empty[65] = "";
-  empty[65] = (Serial1.read());
-  Serial.print("powerup -stuff found in serial buffer=> ");
-  //Serial.println(empty);
+  //empty[65] = (Serial1.read());
+  WhatsINSerial1();//fills MESSAGE with serial1 contents
+  Serial.print("powerup -stuff found in serial1 buffer=> ");
+  Serial.println(MESSAGE);
   Serial1.println("AT+"); // shoot in test signal, let Serial1Response wait for signal
   //Serial.println("AT+");//troubleshooting
   delay(1000);
   if (Serial1.available())
   {
-  for(x=0; x = Serial1.available();  x++)
+  for(x=0; x < Serial1.available();  x++)
   {
     empty[x] = Serial1.read();
   }   
@@ -182,7 +243,7 @@ float takeReading()//stores range in global variables
   {
   int centigrade = (Ifahrenheit - 32) * 4 / 9;
   Irange = analogRead(analogIn) * (331.3 / IVsound); //Temperature correction applied, 1 count/cmdistance
-  PWrange = ( pulseIn(pwPin, HIGH) / 58) * (333.1 / IVsound)*(191/170) ; //58us/cm, temperature correction applied
+  PWrange = ( pulseIn(pwPin, HIGH) ) * (333.1 / IVsound)*(0.0195) ; //58us/cm, temperature correction applied
   I[x]=Irange;
    PW[x]=PWrange;
      }
@@ -232,39 +293,44 @@ float takeReading()//stores range in global variables
 void smsMode()
 {
   int x;
-  char empty[65] = "";
+  //char empty[65] = "";
   Serial1.print("AT+CMGF=1\r");    //Because we want to send the SMS in text mode
-  delay(500);
-  if (Serial1.available())
+  delay(500);//is this enough time?
+  WhatsINSerial1();//Looking for response
+  /*if (Serial1.available())
   {
-  for(x=0; x = Serial1.available();  x++)
+  for(x=0; x < Serial1.available();  x++)
   {
     empty[x] = Serial1.read();
   }   
-  }
+  }*/
   Serial.print("Response to sms mode =>");
-  Serial.println(empty);
+  Serial.println(MESSAGE);
 }
 
 void SendTextMessage()
 {
-  for (int x = 0; x < 2; x++)
+  Serial.println("Send TextMessage");
+   for (int x = 0; x < 2; x++)
   {
     if (x == 0 )
     {
       Serial1.flush();
       Serial1.print("AT+CMGS =");
-      Serial.print("AT+CMGS =");
+      Serial.print("AT+CMGS = ");
       Serial1.println(phone1);
       Serial.println(phone1);
       if (!Serial1.available())
       {
         Serial.print("waiting on modem to respond to at+cmgs=...");
-      }
+      
       while (!Serial1.available())//wait till modem responds with cr
       {
-        delay(1000);
-      }
+        Serial1.print("AT+CMGS =");
+         Serial1.println(phone1);
+          Serial.print("AT+CMGS =");
+        delay(10000);
+      }}
       //Im just going to assume the cr is what is in the buffer
     }
   }
@@ -277,6 +343,13 @@ void SendTextMessage()
 //delay(100);
 //Serial1.println(char(26));//the ASCII code of the ctrl+z is 26
 //delay(100);
-
-
+void WhatsINSerial1()//function to recycle message buffer read Serial1 buffer
+{
+ int x=0;
+  for ( x = 0; x < 64; x++)
+  {
+  MESSAGE[x]=Serial1.read();
+  //MESSAGE[(2*x)+1]=MESSAGE[x];
+  }
+  }
 
