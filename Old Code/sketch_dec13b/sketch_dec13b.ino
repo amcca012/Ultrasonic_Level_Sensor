@@ -1,8 +1,5 @@
 #include <PString.h>
 char MESSAGE [160] = "" ;
-//int Zero = 10000; //CM to pavementwill restatrt to level=0
-
-//const int timeMinutes = 1;//Set time between readings
 const int powerpin = 31;//cycle for software start gprs
 const int txpin = 18;//pins to comm with gprs shield
 const int rxpin = 19;
@@ -11,7 +8,7 @@ const int analogIn = A2; //analog ranging pin
 const int pingPermit = 22; //digital 22 high >20us=range
 const int temperatureIn = A1;//Temp sensor lm35 speed sound correction
 #include <stdio.h>//Standard inout
-#include<Wire.h>//TWI/IC2
+//#include<Wire.h>//TWI/IC2
 unsigned int Izero = 0;//Start program with new zero
 unsigned long int PWrange = 0;
 int Iday = 0;
@@ -24,13 +21,11 @@ int Isecond = 0;
 int ItimeZone = -20;
 int Irange = 0;//dist to surface
 int Ilevel = 0 ;//level as level approachs detector from  Izero/ causes level to be initially neg
-
-//int Ifahrenheit = 100;
 int ts = 0; //switch for troubleshooting verbosity
-int tc = 1; //switch for temperature correctio
-//float pwcal = 0;
+int tc = 1; //switch for temperature correction
+int cal = 0; //switch for cal 1=on 0 = off
 char phone1[] = "+17573248688"; //AT command cmgs requires quotation marks around text string
-char phone2[] = "+17575256148";//8
+char phone2[] = "+17575256148";//
 //char phone[] = "+17579151048";
 char timeStamp[23] = "15/01/20,13:15:10-20";//This format is for AT command, is altered for MESSAGE
 PString str( MESSAGE, 160 );//PString(buffer, sizeof(buffer), pi);
@@ -40,7 +35,6 @@ void setup()//........................................................SETUP.....
 {
   Serial1.begin(9600);
   Serial.begin(9600);  //Serial1.begin(9600);//Mega shield extra UARTs, ensure correct board is selected
-  //Serial.println(phone1);
   delay(100);
   pinMode(pingPermit, OUTPUT);//d22 range  on HIGH>22us
   digitalWrite(pingPermit, HIGH); //May just leave on for better readings
@@ -52,80 +46,95 @@ void setup()//........................................................SETUP.....
   Serial.println("  4/28");
   powerup();
   smsMode();//clears message
-  Serial.println("Sending ATE0");
-  Serial1.println("ATE0");
-  isSerial1Filling(500);
-  WhatsINSerial1();
-  Serial.println(MESSAGE);
-  if(tc==0)
+  if (cal)
+  {
+    Serial.println(" Calibrate Mode on");
+  }
+  if (tc == 0)
   {
     Serial.println("Temperature compensation is off");
   }
-    clearMessage();
+  clearMessage();
+  //error(2);
   Serial.println("     Start Loop");
 }
 
 void loop()//.........................................................LOOP...............
 {
+  calib();
   clearMessage();
-   hourlyReport();
+  takeTime();
+  hourlyReport();
   takeTime();//get timestamp ready
   SendTextMessage(phone1);//runs log assembler (logdata) and transmits
-  SendTextMessage(phone2);
-
-  
+  SendTextMessage(phone2);//add as many phones as desiredSendTestMessage(phone3) etc
 }
-
+void calib()
+{
+  while (cal == 1)
+  {
+    delay(5000);
+    takeReading();
+    Serial.print(Irange);
+    Serial.println(" CM  Analog output");
+    Serial.print(PWrange);
+    Serial.println(" CM pulse width output");
+  }
+}
 void clearMessage()//function to empty message buffer...............clearMessage..........
 {
   if (ts == 1)
   {
-    Serial.println("      clearMessage     ");//fills message with whatever, terminator in pos 160
+    Serial.println("      clearMessage     ");//fills message with \0, terminator in pos 160
   }
   int x;
   for (x = 0; x < 160; x++)
   {
-    MESSAGE[x] = '~';
+    MESSAGE[x] = '\0';
   }
   MESSAGE[160] = '\0'; //string terminator, null ascii 0
 }
+
 
 void hourlyReport()//1=timer for logginghourly or level change
 {
   Serial.println(' ');
   Serial.println("................Hourly report............");
-  long time = millis();
-  delay(2000);
-  //int c = 0;
-  int l = Ilevel;//reset to this base level for detecting level changes between houly reports
-  while (time + 3600000 > (millis() )) //ms per hour
+  float time = millis();
+  float hour = 3480000;//tweaked to reduce interval from 62 to 60 minut av
+  float minut = 59400;
+  float ms = 4294967295;
+  while (millis() + hour > ms)
   {
-    //takeTemp();done in Vsound()
-    delay(60000);//take reading every 1 min approx to trigger logging on level increase
+    time = millis();//mark time until millis function rolls over to zero
+  }
+  delay(2000);
+  int l = Ilevel;//reset to this base level for detecting level changes between houly reports
+  while (time + hour > millis()  ) //ms per hour
+  {
     takeReading();
- Serial.print(Ilevel);
-  Serial.print(" CM level at ");
-  Serial.print(60-(millis()/60000)-(time/60000));
-  Serial.println(" Min.");
+    delay(minut);//take reading every 1 min approx to trigger logging on level increase
+    Serial.print(Ilevel);
+    Serial.print(" CM level at ");
+    Serial.print(60 - ((millis() - time ) / minut)); // should work if prevent rollover
+    Serial.println(" Min.");
     if ((Ilevel - l) > 2 || (l - Ilevel) > 2) //level change >1 or millis() rolled over
     {
-     delay(5000);
-     takeReading();
+      delay(5000);
+      takeReading();
       if ((Ilevel - l) > 2 || (l - Ilevel) > 2) //level change >1 or millis() rolled over
-    {
-      
-      Serial.print("Reporting large level change of (cm) ");
-      Serial.println(Ilevel - l);
+      {
+        Serial.print("Reporting large level change of (cm) ");
+        Serial.println(Ilevel - l);
+        return;
+      }
       return;
     }
-    } 
-       
   }
+
   Serial.println("..........hourly report follows......");
   return;
 }
-
-
 
 int isSerial1Filling(int counts)//(count delay)returns current size, or zero if no change, 64 if full...................
 {
@@ -170,12 +179,8 @@ int isSerial1Filling(int counts)//(count delay)returns current size, or zero if 
   }
   return 0;
 }
-
-
-
 void logdata()//     assemble body of text message.......................LOG .... DATA....................................
 {
-
   clearMessage();
   Serial.println("       logdata");
   PString str( MESSAGE, 160  );
@@ -209,7 +214,7 @@ void logdata()//     assemble body of text message.......................LOG ...
   str.print(",");
   if (ts == 1)
   {
-    Serial.print("Logdata assembles followint data string= ");
+    Serial.print("Logdata assembles following data string= ");
     Serial.println(MESSAGE);
   }
 
@@ -223,7 +228,6 @@ int MESSAGEScanner(char pattern[], int s) //..............................patter
     Serial.println(' ');
     Serial.println(".............Start message scanner..............................");
     //Just insert # of char in string. Careful,Zero may a be location.not a false
-
     Serial.print("MESSAGEScanner Looking in MESSAGE for ");
     Serial.println(pattern);
     Serial.print("Pattern size is (incl null)");
@@ -237,7 +241,7 @@ int MESSAGEScanner(char pattern[], int s) //..............................patter
     Serial.println(MESSAGE);
   }
   for (location = 0 ; location <= 160 - s; location++) //scan whole messageif necessary,
-    // secondary scan using y for full match. note 1st false boots out of for loop
+    // secondary scan using y for full match. note 1st false boots out of for() loop
   {
     for (y = 0; MESSAGE[location + y] == pattern[y] ; y++) //subsquent charecters match
     {
@@ -249,7 +253,7 @@ int MESSAGEScanner(char pattern[], int s) //..............................patter
         Serial.print(" =Pattern[location]= ");
         Serial.println(pattern[y]);
       }
-      if (y == s - 1  ) //1st location is 0
+      if (y == s - 1  ) //loc0, loc1, ... locx=1st pattern char+y(=0),locx+y(=1),locx+y(=2)...locx+y(=s-1),loc,...\n(y=160)
       {
         if (ts == 1)
         {
@@ -262,8 +266,6 @@ int MESSAGEScanner(char pattern[], int s) //..............................patter
       }
     }//pattern scan ends here if no match,resume message scan
   }
-
-
   if (ts == 1)
   {
     Serial.print("pattern not found, highest location scanned is ");
@@ -273,7 +275,7 @@ int MESSAGEScanner(char pattern[], int s) //..............................patter
 }
 
 
-void PauseToFillSerial1(int counts)//Locks up for 1000 if no activity..................
+void PauseToFillSerial1(int counts)//Waits 10 times for (counts) to give chance of response to Serial1)..................
 {
   //if (ts = 1) // use to wait without permanent lockup
   Serial.println("...................PauseToFillSerial1.............................");
@@ -289,7 +291,7 @@ void PauseToFillSerial1(int counts)//Locks up for 1000 if no activity...........
       }
     }
   }
-  while (isSerial1Filling(counts)) //attempt to allow answer to finish before moving on
+  while (isSerial1Filling(counts)) //allow to fill, but if 64 bytes, need to "read" to make room for more
   {
     Serial.print("filling");
     delay(1000);
@@ -305,36 +307,29 @@ void PauseToFillSerial1(int counts)//Locks up for 1000 if no activity...........
 void powerup()// ...................................................POWER UP..........
 {
   Serial.println("      Powerup");
-  //clearMessage();//puts in 160 \n in MESSAGE
   int x = 0;
-  Serial1.println("AT"); // removed +, shoot in test signal(AT), let Serial1Response wait for signal
-  //Serial.println("Sending \"AT\" ");//troubleshooting
+  int y = 0;
+  Serial1.println("AT"); // shoot in test signal(AT), let Serial1Response wait for signal
   Serial1.flush();
-  PauseToFillSerial1(100);
-  delay(5000); //I think I get here to fast and serial isnt filling yet
-  //if (isSerial1Filling(100))
-  //{
-  //  WhatsINSerial1();
-  //}
+  PauseToFillSerial1(1000);//if its powered up, something should happen
+  //delay(5000);
   WhatsINSerial1();
-  x = MESSAGEScanner("AT", 2);
-  if (x == 0)
-  {
-    x = MESSAGEScanner("OK", 2);
-  }
-  while ( x == 0) //o= not found, location can never be zero with gsm module
+  x = MESSAGEScanner("AT", 2);//anything to say gprs is alive
+  y = MESSAGEScanner("OK", 2);
+  while ( x + y == 0) //o= not found, location can never be zero with gsm module
   {
     Serial.println("another try...AT");//troubleshooting
     Serial1.println("AT");
     Serial1.flush();
     PauseToFillSerial1(1000);
     WhatsINSerial1();
-    x = MESSAGEScanner("OK", 2);
-    if (x > 0)
+    x = MESSAGEScanner("AT", 2);//anything to say gprs is alive
+    y = MESSAGEScanner("OK", 2);
+    if (x + y > 0)
     {
       return;
     }
-    delay(15000);
+    delay(15000);//this sequence toggles gprs unit between off an on
     digitalWrite(powerpin, LOW);
     delay(1000);
     digitalWrite(powerpin, HIGH);
@@ -366,9 +361,11 @@ void printleading0(int x)// fomats x<10 with leading 0, add to timest...........
   }
 }
 
-
 void SendTextMessage( char phone[])//......................................Send MESSAGE...............
 {
+  int y = 0;
+  int x = 0;
+  int z = 0;
   if (ts == 1)
   {
     Serial.print('\r');
@@ -376,47 +373,49 @@ void SendTextMessage( char phone[])//......................................Send 
     Serial.print("        SendTextMessage to ");
     Serial.println(phone);
   }
-  //takeTemp();
-  //takeReading();
-  //takeTime();
-  logdata();//assembles time and data into MESSAGE
-  Serial1.flush();
-  Serial1.print("AT+CMGS =\"");
- // Serial1.print('\"');
-  Serial1.print(phone);
-  Serial1.print('\"');
-  Serial1.print('\r');//<cr>
-  Serial1.print(MESSAGE);
-  Serial1.print('\r');
-  delay(100);//shouldn't need this
-  Serial1.print(char(26));//ctrlz esc ctlrl27
-  if (ts == 1)
+  while (x + y == 0) //this will loop until message succeeds
   {
-    Serial.print("AT+CMGS =\"");
-    Serial.print(phone);
-    Serial.print('\"');
-    Serial.print('\r');
-  }
-  Serial.print(MESSAGE);
-  Serial.print('\r');
-  Serial.print(char(26));
-
-
-
+    logdata();//assembles time and data into MESSAGE
+    Serial1.flush();
+    Serial1.print("AT+CMGS =\"");
+    Serial1.print(phone);
+    Serial1.print('\"');
+    Serial1.print('\r');
+    while (!Serial1.available())//the > charecter appears
+    {
+      for (int count = 0; count < 25; count++)
+      {
+        delay(10);//this ill take place of delay(150)
+      }
+      break;//if program gets here, something is wrong
+    }
+    //delay(150);
+    Serial1.print(MESSAGE);
+    Serial1.print('\r');
+    Serial1.print(char(26));//ctrlz esc ctlrl27
+    if (ts == 1)
+    {
+      Serial.print("AT+CMGS =\"");
+      Serial.print(phone);
+      Serial.println('\"');
+    }
+    Serial.println(MESSAGE);
+    while ( !isSerial1Filling(100))
+    {
+    }
+    WhatsINSerial1();
+    x = MESSAGEScanner("+cmgs", 5);//..........did message get sent?...............
+    y = MESSAGEScanner("OK", 2);
+    z = MESSAGEScanner("ERROR", 5);
+    if (z > 0)
+    {
+      Serial.println(" ...............Error response first try SMGS............");
+      Serial.println(MESSAGE);
+      //delay(10000);
+    }
+  }//if get +CMGS or OK exit while loop here
 }
 
-int Serial1Response(int maxsec )//waits "maxsec" sec maximum for serial1 (default 0 ), returns bytes available
-{
-  Serial.println("Serial1Response() is checking serial bytes available");//........................Serial..Response
-  long int x = 0;
-  for ( x = 0; x == (1000 * maxsec); x++)//100*delay of 10 usec*maxsec
-  {
-    delay(10);
-  }
-  Serial.print(Serial1.available());
-  Serial.println(" bytes avaiable from serial 1");
-  return (Serial1.available());//return some number bytes available
-}
 
 void smsMode()//..................................................SMS..............
 {
@@ -430,19 +429,16 @@ void smsMode()//..................................................SMS...........
 
 int takeTemp()//.................................................Take Temp.................
 {
-  int F = (analogRead(temperatureIn) * (0.488  * 9 / 4)) + 32;
+  float f = (analogRead(temperatureIn) * (0.488  * 9 / 4)) + 32;
+  delay(10);
+  f = (analogRead(temperatureIn) * (0.488  * 9 / 4)) + 32;
+  F = (int)f; //use float for calc then cast to int
   if (ts == 1)
   {
     Serial.println("............Taking Temperature ............");
     Serial.print(F);
     Serial.println( " F");
-    //Serial.print(centigrade);
-    // Serial.println( " c");
   }
-  //int F =(analogRead(temperatureIn) *(0.488  * 9/4))+32)
-  //Ifahrenheit = (centigrade) * 9 / 4 + 32;
-  //Ifahrenheit=70;// really unstable
-  //Vsound = 331.3 ;//+ (centigrade * .6);// Corrected V sound m/sec
   return F;
 }
 
@@ -450,7 +446,7 @@ int takeTemp()//.................................................Take Temp......
 void takeTime()//.clears MESSAGE sets time.................................................Take..Time...........
 {
   int M = 1; //local message offset variable
-  Serial.println("..... Entering takeTime function..........");
+  Serial.println("..................... Entering takeTime function..........");
   int x = 0;
   clearMessage();//fill MESSAGE w nulls
   if (ts == 1)
@@ -463,13 +459,19 @@ void takeTime()//.clears MESSAGE sets time......................................
   {
     Serial.print('.');
   }
+  Serial.println(' ');
   isSerial1Filling(1000);
   WhatsINSerial1();// read Serial1 buffer into MESSAGE.
+  if (MESSAGEScanner("error", 5))
+  {
+    Serial.println(MESSAGE);
+  }
   if (ts == 1)
   {
     Serial.println(MESSAGE);
   }
   M = MESSAGEScanner("+CCLK:", 6) ;
+  Serial.println(' ');
   Serial.print("Response to cclk =>");
   if (M == 0)
   {
@@ -529,16 +531,17 @@ void takeTime()//.clears MESSAGE sets time......................................
 
 int takeReading()//stores median range in global variables...sets global PWrange Irange Izero..............................................
 {
-  int v = Vsound();
-  if (ts==1)
+  float v = Vsound();
+  if (ts == 1)
   {
-   
-  Serial.println("......... Take distance reading.........");
+
+    Serial.println("......... Take distance reading.........");
   }
   if (Irange == 0)//first time through irange will be zero
   {
-    Irange = analogRead(analogIn) *( v / 331.3) * (1.14);
-
+    Irange = analogRead(analogIn) * ( v / 331.3) ;
+    delay(10);
+    Irange = analogRead(analogIn) * ( v / 331.3) ;
   }
   int oldIrange = Irange;
   int I[4];
@@ -546,19 +549,22 @@ int takeReading()//stores median range in global variables...sets global PWrange
   for ( int x = 0; x <= 3; x++)//load three readings into array
   {
     //int centigrade = (Ifahrenheit - 32) * 4 / 9;
-    Irange = analogRead(analogIn) * (v / 331.3) * (1.14); //Temperature correction applied, 1 count/cmdistance
+    Irange = analogRead(analogIn) ; //Temperature correction applied, 1 count/cmdistance
+    delay(10);
+    Irange = analogRead(analogIn) * (v / 331.3) ; //Temperature correction applied, 1 count/cmdistance
+
     //Serial.print(analogRead(analogIn));
-    PWrange = (( pulseIn(pwPin, HIGH)) / 53) *( v / 331.3)*(1.19) ; //58us/cm, temperature correction applied
+    PWrange = (( pulseIn(pwPin, HIGH)) / 51.28) * ( v / 331.3)  ; //58us/cm, temperature correction applied
     if (oldIrange - Irange > 1 || Irange - oldIrange > 1)
     {
-      Irange = analogRead(analogIn) *( v / 331.3) * (1.14); //Temperature correction applied, 1 count/cmdistance
+      Irange = analogRead(analogIn) * ( v / 331.3) ; //Temperature correction applied, 1 count/cmdistance
+      delay(10);
+      Irange = analogRead(analogIn) * (v / 331.3) ; //Temperature correction applied, 1 count/cmdistance
     }
     I[x] = Irange;
     PW[x] = PWrange;
-
   }
   delay(50);
-
 
   if (I[0] > I[1] && I[1] > I[2] || I[0] < I[1] && I[1] < I[2]) //find median value
   {
@@ -569,14 +575,10 @@ int takeReading()//stores median range in global variables...sets global PWrange
     if (I[2] > I[1] && I[0] > I[2] || I[0] < I [2] && I[2] < I [1])
     {
       Irange = I[2] ;
-      // Serial.print("Median analogue 2 => ");//testing
-      //  Serial.println(I[2]);//testing
-    }
+        }
     else
     {
       Irange = I[0];
-      // Serial.print("Median analogue 0=> ");//testing
-      //Serial.println(I[0]);//testing
     }
   }
   if (PW[0] > PW[1] && PW[1] > PW[2] || PW[0] < PW[1] && PW[1] < PW[2])
@@ -594,7 +596,7 @@ int takeReading()//stores median range in global variables...sets global PWrange
       PWrange = PW[0];
     }
   }
-  
+
   if (ts == 1)
   {
     Serial.print(Irange);
@@ -608,32 +610,28 @@ int takeReading()//stores median range in global variables...sets global PWrange
     Izero = Irange;
   }
   Ilevel = Izero - Irange; //  Irange Ilevel &  IzeroIzero global no return statement
- // Serial.print(Ilevel);
-  //Serial.print(" CM level at ");
- // Serial.print(millis()/60000);
- // Serial.println(" Min.");
+  
 }
 
 
-int Vsound()//.............returns  sound velocity in m/s.......................
+float Vsound()//.............returns  sound velocity in m/s.......................
 {
   if ( tc == 1)
   {
-    if(ts==1)
+    if (ts == 1)
     {
       Serial.println("..... Vsound calculating sound velocity....");
     }
     int Fahrenheit = takeTemp();
-    int Centigrade = ( Fahrenheit - 32) * 9 / 4;
-    int vsound = 331.3 + (Centigrade * .6);// Corrected V Vsound m/sec
+    float Centigrade = ( Fahrenheit - 32) * 4 / 9;
+    float vsound = 331.3 + (Centigrade * .6);// Corrected V Vsound m/sec
+    vsound =  (20.05 * sqrt(273.15 + Centigrade));
     if (ts == 1)
     {
       Serial.print("Vsound m/s =");
       Serial.println(vsound);
-
     }
     return vsound;
-
   }
   //Vsound=331.3;
   return 331.3;
